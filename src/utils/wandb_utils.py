@@ -140,11 +140,13 @@ def log_roc_curve(y_true, y_pred_proba):
         y_true: True labels
         y_pred_proba: Prediction probabilities
     """
-    fpr, tpr, _ = roc_curve(y_true, y_pred_proba)
+    # W&B expects probabilities for each class, so we need to reshape
+    # For binary classification, we need [prob_class_0, prob_class_1]
+    y_pred_proba_reshaped = np.column_stack([1 - y_pred_proba, y_pred_proba])
     
     wandb.log({"roc_curve": wandb.plot.roc_curve(
         y_true,
-        y_pred_proba,
+        y_pred_proba_reshaped,
         labels=["Legitimate", "Fraud"]
     )})
 
@@ -157,9 +159,13 @@ def log_precision_recall_curve(y_true, y_pred_proba):
         y_true: True labels
         y_pred_proba: Prediction probabilities
     """
+    # W&B expects probabilities for each class, so we need to reshape
+    # For binary classification, we need [prob_class_0, prob_class_1]
+    y_pred_proba_reshaped = np.column_stack([1 - y_pred_proba, y_pred_proba])
+    
     wandb.log({"precision_recall_curve": wandb.plot.pr_curve(
         y_true,
-        y_pred_proba,
+        y_pred_proba_reshaped,
         labels=["Legitimate", "Fraud"]
     )})
 
@@ -259,13 +265,23 @@ def log_data_tables(X_train, X_test, y_train, y_test, sample_size=1000):
         y_test: Test labels
         sample_size: Number of samples to log
     """
-    # Sample data for visualization
-    train_sample = X_train.sample(min(sample_size, len(X_train)))
-    test_sample = X_test.sample(min(sample_size, len(X_test)))
+    # Sample data for visualization - use integer indices to avoid index issues
+    train_indices = np.random.choice(len(X_train), min(sample_size, len(X_train)), replace=False)
+    test_indices = np.random.choice(len(X_test), min(sample_size, len(X_test)), replace=False)
     
-    # Add labels
-    train_sample['fraud'] = y_train[train_sample.index]
-    test_sample['fraud'] = y_test[test_sample.index]
+    train_sample = X_train.iloc[train_indices].copy()
+    test_sample = X_test.iloc[test_indices].copy()
+    
+    # Add labels - handle both pandas and numpy arrays
+    if hasattr(y_train, 'iloc'):
+        train_sample['fraud'] = y_train.iloc[train_indices]
+    else:
+        train_sample['fraud'] = y_train[train_indices]
+        
+    if hasattr(y_test, 'iloc'):
+        test_sample['fraud'] = y_test.iloc[test_indices]
+    else:
+        test_sample['fraud'] = y_test[test_indices]
     
     # Log as W&B tables
     wandb.log({"training_data_sample": wandb.Table(dataframe=train_sample)})
