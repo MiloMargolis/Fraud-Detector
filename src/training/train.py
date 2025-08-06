@@ -20,7 +20,8 @@ from models.model_factory import ModelFactory
 from utils.wandb_utils import (
     init_experiment, log_metrics, log_confusion_matrix, 
     log_classification_report, save_model_artifact, 
-    log_feature_importance, log_data_info, finish_experiment
+    log_feature_importance, log_data_info, finish_experiment,
+    log_roc_curve, log_precision_recall_curve, log_data_tables
 )
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
@@ -197,9 +198,9 @@ class FraudDetectionTrainer:
         
         return model, metrics, y_pred, y_pred_proba
     
-    def log_results(self, model, metrics, y_test, y_pred, y_pred_proba, model_type):
+    def log_results(self, model, metrics, y_test, y_pred, y_pred_proba, model_type, X_train, X_test, y_train):
         """
-        Log results to W&B.
+        Log results to W&B using native features.
         
         Args:
             model: Trained model
@@ -208,23 +209,36 @@ class FraudDetectionTrainer:
             y_pred: Predicted labels
             y_pred_proba: Prediction probabilities
             model_type: Type of model
+            X_train: Training features
+            X_test: Test features
+            y_train: Training labels
+            y_test: Test labels
         """
         # Log metrics
         log_metrics(metrics)
         
-        # Log confusion matrix
+        # Log confusion matrix using native W&B
         if self.config['wandb'].get('log_confusion_matrix', True):
             log_confusion_matrix(y_test, y_pred)
         
-        # Log classification report
+        # Log classification report using native W&B table
         log_classification_report(y_test, y_pred)
         
-        # Log feature importance
+        # Log ROC curve using native W&B
+        log_roc_curve(y_test, y_pred_proba)
+        
+        # Log precision-recall curve using native W&B
+        log_precision_recall_curve(y_test, y_pred_proba)
+        
+        # Log feature importance using native W&B
         feature_importance = model.get_feature_importance()
         if feature_importance:
             log_feature_importance(model.model, list(feature_importance.keys()), model_type)
         
-        # Save model artifact
+        # Log data tables for interactive exploration
+        log_data_tables(X_train, X_test, y_train, y_test)
+        
+        # Save model artifact using native W&B
         if self.config['wandb'].get('log_model', True):
             save_model_artifact(model.model, f"{model_type}_fraud_detector")
     
@@ -259,8 +273,9 @@ class FraudDetectionTrainer:
                 model_type, X_train, y_train, X_test, y_test
             )
             
-            # Log results
-            self.log_results(model, metrics, y_test, y_pred, y_pred_proba, model_type)
+            # Log results using native W&B features
+            self.log_results(model, metrics, y_test, y_pred, y_pred_proba, model_type, 
+                           X_train, X_test, y_train)
             
             print(f"\nExperiment completed successfully!")
             print(f"Best F1 Score: {metrics['f1_score']:.4f}")
@@ -300,8 +315,9 @@ class FraudDetectionTrainer:
                     model_type, X_train, y_train, X_test, y_test
                 )
                 
-                # Log results
-                self.log_results(model, metrics, y_test, y_pred, y_pred_proba, model_type)
+                # Log results using native W&B features
+                self.log_results(model, metrics, y_test, y_pred, y_pred_proba, model_type,
+                               X_train, X_test, y_train)
                 
                 results[model_type] = metrics
                 
